@@ -1,0 +1,13 @@
+{
+  "name": "geospatial-system-tests",
+  "private": true,
+  "scripts": {
+    "test:setup": "php tests/bootstrap_test_db.php",
+    "test:schema": "php tests/phase1_foundation_test.php && php tests/phase2_family_import_test.php && php tests/phase3_case_import_test.php && php tests/phase4_tax_declaration_test.php && php tests/case_hierarchy_and_map_test.php && php tests/cross_phase_workflow_test.php && php tests/workflow_mutation_test.php",
+    "test:browser": "playwright test",
+    "test": "npm run test:setup && npm run test:schema && npm run test:browser"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}

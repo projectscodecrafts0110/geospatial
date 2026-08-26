@@ -1,0 +1,8 @@
+<?php
+require_once '../includes/security.php';start_secure_session();require_roles(['admin']);require_csrf();require '../includes/db.php';require_once '../includes/xlsx_family_import.php';
+if($_SERVER['REQUEST_METHOD']!=='POST'||!isset($_FILES['workbook'])){http_response_code(400);exit('Workbook required.');}
+$file=$_FILES['workbook'];if($file['error']!==UPLOAD_ERR_OK||$file['size']>10*1024*1024||strtolower(pathinfo($file['name'],PATHINFO_EXTENSION))!=='xlsx'){header('Location: ../auth/families/import.php?error=invalid_file');exit;}
+$hash=hash_file('sha256',$file['tmp_name']);$stmt=$conn->prepare('SELECT COUNT(*) FROM import_batches WHERE source_hash=?');$stmt->bind_param('s',$hash);$stmt->execute();if((int)$stmt->get_result()->fetch_row()[0]>0){header('Location: ../auth/families/import.php?error=duplicate_file');exit;}
+$dir=sys_get_temp_dir().DIRECTORY_SEPARATOR.'geospatial_private_imports';if(!is_dir($dir)&&!mkdir($dir,0700,true))throw new RuntimeException('Private import directory unavailable.');$token=bin2hex(random_bytes(24));$path=$dir.DIRECTORY_SEPARATOR.$token.'.xlsx';if(!move_uploaded_file($file['tmp_name'],$path))throw new RuntimeException('Private upload failed.');
+try{$preview=family_import_preview($conn,$path);}catch(Throwable $e){@unlink($path);error_log('Workbook preview failed: '.$e->getMessage());header('Location: ../auth/families/import.php?error=parse_failed');exit;}
+$_SESSION['family_import_preview']=['token'=>$token,'path'=>$path,'hash'=>$hash,'name'=>basename($file['name']),'ownership'=>normalize_source_text($_POST['owning_tribe']??null),'preview'=>$preview,'created'=>time()];header('Location: ../auth/families/import.php?preview=1');

@@ -1,0 +1,5 @@
+<?php
+declare(strict_types=1);
+function tax_scope(mysqli $conn):?string{return in_array($_SESSION['role']??'', ['tribe_leader','tribe_rep'],true)?current_user_tribe($conn):null;}
+function require_tax_access(mysqli $conn,int$id):array{$stmt=$conn->prepare('SELECT t.*,pt.name property_type_name,p.land_name parcel_name FROM tax_declarations t LEFT JOIN property_types pt ON pt.id=t.property_type_id LEFT JOIN ip_land_parcels p ON p.id=t.parcel_id WHERE t.id=?');$stmt->bind_param('i',$id);$stmt->execute();$t=$stmt->get_result()->fetch_assoc();if(!$t){http_response_code(404);exit('Tax Declaration not found.');}$scope=tax_scope($conn);if($scope!==null&&!hash_equals($scope,(string)$t['owning_tribe'])){http_response_code(403);exit('Access denied.');}return$t;}
+function nullable_decimal($v):?string{$v=trim((string)$v);if($v==='')return null;if(!is_numeric($v)||$v<0)throw new InvalidArgumentException('Invalid numeric value.');return number_format((float)$v,str_contains($v,'.')?min(4,strlen(substr(strrchr($v,'.'),1))):2,'.','');}
