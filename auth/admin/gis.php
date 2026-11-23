@@ -185,10 +185,9 @@ $taxByParcel=[];$taxResult=$conn->query("SELECT t.id,t.parcel_id,t.td_number,t.d
     /* =========================
        CADASTRAL BASEMAP
     ========================= */
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap & CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
     }).addTo(map);
 
     /* =========================

@@ -46,6 +46,21 @@ $totalMembers=(int)$conn->query('SELECT COUNT(*) FROM ip_family_members')->fetch
 $familyLinkedRecords=(int)$conn->query('SELECT COUNT(*) FROM ip_records WHERE family_member_id IS NOT NULL')->fetch_row()[0];
 $familyLinkedCases=(int)$conn->query('SELECT COUNT(DISTINCT cp.case_id) FROM case_persons_involved cp JOIN ip_family_members fm ON fm.id=cp.family_member_id')->fetch_row()[0];
 $linkedTax=(int)$conn->query('SELECT COUNT(*) FROM tax_declarations WHERE parcel_id IS NOT NULL')->fetch_row()[0];
+$totalCases=(int)$conn->query('SELECT COUNT(*) FROM case_applications')->fetch_row()[0];
+$activeCases=(int)$conn->query("SELECT COUNT(*) FROM case_applications WHERE status NOT IN ('resolved','closed')")->fetch_row()[0];
+$resolvedCases=(int)$conn->query("SELECT COUNT(*) FROM case_applications WHERE status IN ('resolved','closed')")->fetch_row()[0];
+$totalTax=(int)$conn->query('SELECT COUNT(*) FROM tax_declarations')->fetch_row()[0];
+$currentTax=(int)$conn->query("SELECT COUNT(*) FROM tax_declarations WHERE declaration_status='current'")->fetch_row()[0];
+$parcelGeometry=(int)$conn->query("SELECT COUNT(*) FROM ip_land_parcels WHERE boundary_geojson IS NOT NULL OR (latitude IS NOT NULL AND longitude IS NOT NULL)")->fetch_row()[0];
+$familiesWithSpouse=(int)$conn->query("SELECT COUNT(DISTINCT family_id) FROM ip_family_members WHERE member_role='spouse'")->fetch_row()[0];
+$familyLinkCoverage=$totalMembers>0?round(($familyLinkedRecords/$totalMembers)*100):0;
+$parcelGeometryCoverage=$totalLandParcels>0?round(($parcelGeometry/$totalLandParcels)*100):0;
+$taxParcelCoverage=$totalTax>0?round(($linkedTax/$totalTax)*100):0;
+
+$familyAffiliations=$conn->query("SELECT COALESCE(a.name,'Not specified') label,COUNT(*) total FROM ip_families f LEFT JOIN ip_affiliations a ON a.id=f.affiliation_id GROUP BY a.id,a.name ORDER BY total DESC,label")->fetch_all(MYSQLI_ASSOC);
+$familyLocations=$conn->query("SELECT COALESCE(NULLIF(f.barangay,''),'Not specified') barangay,COUNT(DISTINCT f.id) families,COUNT(m.id) members FROM ip_families f LEFT JOIN ip_family_members m ON m.family_id=f.id GROUP BY COALESCE(NULLIF(f.barangay,''),'Not specified') ORDER BY families DESC,barangay LIMIT 10")->fetch_all(MYSQLI_ASSOC);
+$memberSex=$conn->query("SELECT COALESCE(sex,'Not specified') label,COUNT(*) total FROM ip_family_members GROUP BY sex ORDER BY total DESC")->fetch_all(MYSQLI_ASSOC);
+$caseSummary=$conn->query("SELECT status,COUNT(*) total FROM case_applications GROUP BY status ORDER BY FIELD(status,'pending','ongoing','under_review','resolved','closed')")->fetch_all(MYSQLI_ASSOC);
 
 /* =========================
    IP POPULATION BY TRIBE
@@ -277,6 +292,15 @@ $barangays = mysqli_query($conn, "
 
     <div class="row g-3 mb-4"><?php foreach([['IP Families',$totalFamilies,'people-fill'],['Family Members',$totalMembers,'person-vcard'],['Records Linked to Families',$familyLinkedRecords,'link-45deg'],['Cases Linked to Families',$familyLinkedCases,'folder-symlink'],['Tax Declarations on Parcels',$linkedTax,'geo-alt']]as[$label,$value,$icon]):?><div class="col-6 col-lg"><div class="card-box metric-card"><div class="d-flex justify-content-between"><div><div class="metric-label"><?=$label?></div><div class="metric-value"><?=number_format($value)?></div></div><div class="metric-icon"><i class="bi bi-<?=$icon?>"></i></div></div></div></div><?php endforeach;?></div>
     <div class="data-context mb-4">Family linkage indicators distinguish legacy individual records from structured households and show how many cases already have explicit family-member relationships. Unlinked records remain valid and require reviewed matching.</div>
+
+    <div class="row g-3 mb-4"><?php foreach([['All Cases',$totalCases],['Active Cases',$activeCases],['Resolved / Closed',$resolvedCases],['Tax Declarations',$totalTax],['Current Declarations',$currentTax],['Mapped Parcel Geometry',$parcelGeometry]]as[$label,$value]):?><div class="col-6 col-md-4 col-xl-2"><div class="card-box h-100"><small class="text-muted"><?=$label?></small><h3 class="mb-0"><?=number_format($value)?></h3></div></div><?php endforeach;?></div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-7"><div class="card-box h-100"><h6>Family Affiliation Distribution</h6><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Affiliation</th><th class="text-end">Families</th><th class="text-end">Share</th></tr></thead><tbody><?php foreach($familyAffiliations as$r):?><tr><td><?=e($r['label'])?></td><td class="text-end"><?=number_format($r['total'])?></td><td class="text-end"><?=$totalFamilies?round($r['total']/$totalFamilies*100,1):0?>%</td></tr><?php endforeach;?></tbody></table></div></div></div>
+        <div class="col-lg-5"><div class="card-box h-100"><h6>Household &amp; Data Coverage</h6><?php foreach([['Families with a recorded spouse',$familiesWithSpouse,$totalFamilies?round($familiesWithSpouse/$totalFamilies*100):0],['Members linked to legacy records',$familyLinkedRecords,$familyLinkCoverage],['Parcels with mapped geometry',$parcelGeometry,$parcelGeometryCoverage],['Tax declarations linked to parcels',$linkedTax,$taxParcelCoverage]]as[$label,$value,$pct]):?><div class="mb-3"><div class="d-flex justify-content-between"><span><?=$label?></span><strong><?=number_format($value)?> (<?=$pct?>%)</strong></div><div class="progress mt-1" style="height:7px"><div class="progress-bar bg-success" style="width:<?=min(100,$pct)?>%"></div></div></div><?php endforeach;?><hr><h6 class="small text-uppercase text-muted">Family members by sex</h6><?php foreach($memberSex as$r):?><div class="d-flex justify-content-between"><span><?=e($r['label'])?></span><strong><?=number_format($r['total'])?></strong></div><?php endforeach;?></div></div>
+    </div>
+
+    <div class="row g-3 mb-4"><div class="col-lg-7"><div class="card-box h-100"><h6>Top Family Locations</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Barangay</th><th class="text-end">Families</th><th class="text-end">Members</th></tr></thead><tbody><?php foreach($familyLocations as$r):?><tr><td><?=e($r['barangay'])?></td><td class="text-end"><?=number_format($r['families'])?></td><td class="text-end"><?=number_format($r['members'])?></td></tr><?php endforeach;?></tbody></table></div></div></div><div class="col-lg-5"><div class="card-box h-100"><h6>Case Workload by Status</h6><?php foreach($caseSummary as$r):?><div class="d-flex justify-content-between border-bottom py-2"><span><?=e(ucwords(str_replace('_',' ',$r['status'])))?></span><strong><?=number_format($r['total'])?></strong></div><?php endforeach;?></div></div></div>
 
     <!-- =========================
      CHARTS ROW
